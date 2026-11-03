@@ -16,7 +16,8 @@ Propose P1/P2/P3 per story based on value, risk, and dependencies. Show a table 
 
 ## 3. Group into features
 
-- A feature is a use case delivering end-to-end value: one vertical slice (`src/features/<feature>/`), one branch (`feature/<feature>`).
+- A feature is a use case delivering end-to-end value: one vertical slice (`src/features/<feature>/`).
+- Judge each group: big enough to be its own use case → new feature with its own branch (`jd-gitflow`); a small story that extends a feature still in progress → add it to that feature and its branch.
 - Group stories that share the same use case and data; never group by technical layer (no "database feature", "API feature").
 - Name features in kebab-case, verb-noun when possible (`register-user`).
 - Order by dependencies; flag stories that do not fit any slice.
@@ -52,5 +53,5 @@ Status: `todo` | `in-progress` | `done`. Update it as work progresses (`jd-pair-
 ## 6. Finish
 
 - Set `Sprint: ###` in each selected `docs/user-stories/US-#.md`.
-- Launch the `jd-obsidian-sync` agent in the background with the changed paths.
-- When every feature is `done`, suggest `jd-infra` (first sprint) or `jd-gitflow` release.
+- Save per the docs mode in AGENTS.md: `none` → show it in chat; `mirror`/`vault-only` → launch the `jd-obsidian-sync` agent in the background with the changed paths. Decide the branches for the plan and the features with `jd-gitflow`.
+- When every feature is `done` and merged, suggest `jd-infra` (first sprint) or asking for a release (`jd-gitflow`).

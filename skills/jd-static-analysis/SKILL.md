@@ -5,7 +5,7 @@ description: Run linters, type checks and SonarQube (via MCP) analysis, triage i
 
 # JD Static Analysis
 
-Run only when the developer asks.
+Run only when the developer asks. Fixes go on the branch being analyzed; for fixes outside it, decide the branch with `jd-gitflow`.
 
 ## 1. Local checks
 
@@ -15,7 +15,8 @@ Run only when the developer asks.
 
 ## 2. SonarQube
 
-- Load the SonarQube MCP tools (ToolSearch `sonarqube`). If they are missing, tell the developer and stop at local results.
+- AGENTS.md Tools says SonarQube is not used: skip this section.
+- Load the SonarQube MCP tools (ToolSearch `sonarqube`). Missing: ask the developer to add the SonarQube MCP server (server-side issues, quality gate, hotspots) or go without it (local results only); both are valid. Record the answer under Tools in AGENTS.md.
 - If server results may be stale, run the Sonar scan command from AGENTS.md first.
 - Fetch for the project and current branch: quality gate status, issues (bugs, vulnerabilities, code smells), security hotspots, coverage, duplications.
 
@@ -36,7 +37,8 @@ Show one table, most severe first:
 
 - Fix only what the developer approves.
 - Keep TDD: if a fix changes behavior, write or update the test first.
-- Re-run local checks, tests, and the scan. Repeat until the quality gate passes or the developer stops.
+- Re-run local checks, tests, and the scan. Repeat until the quality gate (or local checks without Sonar) passes or the developer stops.
+- Commit each fix (`fix(<scope>): ...` or `refactor(...)`, `jd-gitflow`).
 
 ## 5. Report
 

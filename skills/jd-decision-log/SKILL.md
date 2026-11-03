@@ -18,7 +18,8 @@ Skip trivial, local, easily reversible choices.
 
 ## Write docs/decisions/ADR-###-<kebab-title>.md
 
-Number = highest existing + 1, three digits.
+Number = highest existing + 1, three digits. Commit it on the branch of the change it records (`jd-gitflow`).
+Docs mode `none`: put the same content in the commit body and the PR description instead of a file.
 
 ```
 # ADR-001: <decision title>
@@ -51,4 +52,4 @@ Keep `docs/decisions/index.md` as a table: `| ADR | Title | Status | Date |`. Ad
 - Short: the whole ADR fits on one screen.
 - Write the developer's reason, not yours. Ask if the reason was not stated.
 - Never rewrite an accepted decision. Create a new ADR and set the old one to `superseded by ADR-###`.
-- Launch the `jd-obsidian-sync` agent in the background with the changed paths.
+- Save per the docs mode in AGENTS.md: `none` → show it in chat; `mirror`/`vault-only` → launch the `jd-obsidian-sync` agent in the background with the changed paths.

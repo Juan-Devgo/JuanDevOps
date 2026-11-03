@@ -12,6 +12,7 @@ The developer decides; the agent analyzes and suggests.
 - Observability: query the tools in `docs/observability.md` through available MCP tools or CLIs; otherwise ask the developer for exports or screenshots.
 - DORA metrics from the developer's DORA action (deployment frequency, lead time, change failure rate, time to restore).
 - Quality: latest SonarQube quality gate and coverage.
+- A source not set up (no DORA action, no SonarQube, no observability tool): ask the developer to add it or go without, unless Tools in AGENTS.md already says. Without it, skip those metrics and say so.
 - Plan vs result: `docs/sprints/###/backlog.md`, ADRs from this sprint.
 
 ## 2. Analyze (when asked, or at sprint end)
@@ -31,7 +32,7 @@ One table, ordered by impact:
 | Finding | Evidence | Suggestion | Type |
 |---|---|---|---|
 
-Types: hotfix (`jd-gitflow`), new story (`jd-backlog`), tech debt, infra change (`jd-infra`), observability gap (`jd-observability`).
+Types: hotfix (only a production bug: `hotfix/X.Y.Z` from `main` with a PR, `jd-gitflow`), new story (`jd-backlog`), tech debt, infra change (`jd-infra`), observability gap (`jd-observability`).
 Add stories to the backlog only after the developer approves.
 
 ## 4. Feedback for the next sprint
@@ -58,4 +59,4 @@ If the backlog has stories not assigned to any sprint, write `docs/sprints/###/r
 
 ## 5. Finish
 
-Launch the `jd-obsidian-sync` agent in the background with the changed paths. Suggest the next step: `jd-sprint` (loop) or the approved fixes.
+Save per the docs mode in AGENTS.md: `none` → show it in chat; `mirror`/`vault-only` → launch the `jd-obsidian-sync` agent in the background with the changed paths. Committed docs modes: decide where to commit with `jd-gitflow`. Suggest the next step: `jd-sprint` (loop) or the approved fixes.

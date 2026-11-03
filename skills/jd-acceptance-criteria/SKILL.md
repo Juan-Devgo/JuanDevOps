@@ -52,5 +52,5 @@ Rules:
 
 ## 4. Finish
 
-- Launch the `jd-obsidian-sync` agent in the background with the written paths.
+- Save per the docs mode in AGENTS.md: `none` → show it in chat; `mirror`/`vault-only` → launch the `jd-obsidian-sync` agent in the background with the changed paths. Committed docs modes: decide where to commit with `jd-gitflow`.
 - Report per story: number of ACs, open questions. Suggest `jd-sprint` when P1 stories are covered.

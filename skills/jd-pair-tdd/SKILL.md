@@ -11,6 +11,7 @@ Developer = navigator (decides what and why). Agent = driver (writes tests and c
 
 - Identify the sprint, feature and user story being worked on. If unclear, ask.
 - Read `docs/user-stories/US-#.md` (its ACs), `docs/sprints/###/backlog.md`, and the slice in `src/features/<feature>/`.
+- Work on the feature's branch. If there is none, decide with `jd-gitflow` (new `feature/<feature>`, or the branch of the feature it extends). Never code on `main` or `develop`.
 - Set the feature status to `in-progress` if it was `todo`.
 
 ## 2. Scope
@@ -32,6 +33,8 @@ The developer asks for a small section. If it is too big for one red-green cycle
 
 Remove duplication and improve names while staying green. Run tests again.
 
+Commit the cycle: `feat(<feature>): <behavior> (US-#, AC-#)` (`jd-gitflow`).
+
 ## 6. Report
 
 Short: tests added (AC ids), files changed, what is left of the story. Suggest the next small section.
@@ -44,4 +47,4 @@ Short: tests added (AC ids), files changed, what is left of the story. Suggest t
 - Essential decision (library, pattern, contract, data model, overruled warning): record it with `jd-decision-log`.
 - Technical questions: answer directly and briefly, with the trade-off.
 - Do not run static analysis unless the developer asks (`jd-static-analysis`).
-- Set the feature to `done` only when the developer confirms and all its ACs have passing tests.
+- Set the feature to `done` only when the developer confirms and all its ACs have passing tests; then open the PR to `develop` (`jd-gitflow`).

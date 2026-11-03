@@ -7,6 +7,8 @@ description: Analyze estimated users, budget and architecture, suggest the infra
 
 ## 1. Gather
 
+Git: decide the branch with `jd-gitflow` (usually a new `feature/infra-<topic>`; a small change can join a branch in progress).
+
 Read `docs/backlog.md` (Notes), `docs/decisions/`, AGENTS.md (stack), the slices in `src/features/`, data stores and external services. Ask with AskUserQuestion only what is missing:
 - Estimated users now and in 12 months; peak requests per second.
 - Monthly budget; cloud provider preference or credits.
@@ -31,7 +33,7 @@ The developer corrects; iterate. Record the final choice with `jd-decision-log`.
 
 ## 4. Document docs/infrastructure.md
 
-Inputs, chosen option, Mermaid diagram, environments, cost estimate, outputs CI/CD needs. Launch the `jd-obsidian-sync` agent in the background.
+Inputs, chosen option, Mermaid diagram, environments, cost estimate, outputs CI/CD needs. Save per the docs mode in AGENTS.md: `none` → show it in chat; `mirror`/`vault-only` → launch the `jd-obsidian-sync` agent in the background with the changed paths.
 
 ## 5. Terraform in infra/
 
@@ -47,9 +49,9 @@ infra/
 - No secrets in code: variables marked `sensitive`, values from a secret manager or CI secrets.
 - Outputs for CI/CD: deploy target, registry URL, URLs, ids.
 - Tag resources with project and environment.
-- Run `terraform fmt`, `terraform validate`, `tflint` if installed, and `terraform plan`.
-- Never run `terraform apply` or `destroy` without explicit developer approval; they cost money and change real resources.
+- Run `terraform fmt`, `terraform validate`, `tflint` and `terraform plan`. Terraform or tflint missing: ask the developer to install it or go without (files written but not validated or planned); record the answer under Tools in AGENTS.md.
+- Never run `terraform apply` or `destroy` without explicit developer approval; they cost money and change real resources. Production applies from `main` through `jd-cicd`.
 
 ## 6. Finish
 
-Summarize the plan output and suggest `jd-cicd`.
+Summarize the plan output, commit and open the PR to `develop` (`jd-gitflow`), and suggest `jd-cicd`.

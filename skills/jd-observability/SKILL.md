@@ -7,6 +7,8 @@ description: Suggest observability tools for the defined architecture and infras
 
 ## 1. Read
 
+Git: decide the branch with `jd-gitflow` (usually a new `feature/observability-<topic>`; a small change can join a branch in progress).
+
 `docs/infrastructure.md`, `docs/decisions/`, AGENTS.md (stack), budget in `docs/backlog.md` Notes, the main user journeys in `docs/user-stories/`.
 
 ## 2. Suggest tools
@@ -45,4 +47,4 @@ Gaps that need code: fix them with `jd-pair-tdd` (tests first).
 
 ## 6. Document docs/observability.md
 
-Tools, what goes where, dashboard links, SLOs, alerts and runbooks. Launch the `jd-obsidian-sync` agent in the background. Suggest `jd-retro` once production data exists.
+Tools, what goes where, dashboard links, SLOs, alerts and runbooks. Save per the docs mode in AGENTS.md: `none` → show it in chat; `mirror`/`vault-only` → launch the `jd-obsidian-sync` agent in the background with the changed paths. Commit and open the PR to `develop` (`jd-gitflow`); it ships with the next release. Suggest `jd-retro` once production data exists.
