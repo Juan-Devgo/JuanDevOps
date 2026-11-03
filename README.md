@@ -14,27 +14,30 @@ flowchart TD
     D --> E[jd-pair-tdd<br/>Step 2: tests first, then code]
     E <--> F[jd-static-analysis<br/>linters + SonarQube]
     E --> G[jd-infra<br/>Step 2.5: Terraform]
-    G --> H[jd-gitflow + jd-cicd<br/>Step 3: branches + GitHub Actions]
+    G --> H[jd-cicd + release<br/>Step 3: GitHub Actions, release/X.Y.Z → main]
     H --> I[jd-observability<br/>Step 4: logs, metrics, traces]
     I --> J[jd-retro<br/>Loop: analysis + feedback]
     J -->|stories left| D
     E -.-> K[jd-decision-log<br/>ADRs]
     G -.-> K
     I -.-> K
+    L[jd-gitflow<br/>any step: branch if needed, commit, PR] -.- A & B & E & G & H & I & J
 ```
+
+`jd-gitflow` is not a single step: in any step the agent decides whether the work needs a branch, and every merge is a PR (see [Git-flow](#git-flow)).
 
 | Step | Skill | What it does |
 |---|---|---|
-| 0 | `jd-agents` | Writes `AGENTS.md` for the project: name, docs mode, stack, commands, slice layout and conventions. `CLAUDE.md` only imports it. |
+| 0 | `jd-agents` | Writes `AGENTS.md` for the project: name, docs mode, stack, commands, slice layout, conventions, git-flow and tools in use. `CLAUDE.md` only imports it. |
 | 1 | `jd-backlog` | Clarifies the spec, then writes `docs/backlog.md` with a table of user stories: `As a <actor>, I need <capability> for <benefit>`. |
 | 1 | `jd-acceptance-criteria` | One doc per story (`docs/user-stories/US-#.md`) with edge cases and ACs: `Given <state>, when <action>, then <result>`. |
 | 2 | `jd-sprint` | Prioritizes the backlog, groups stories into features (vertical slices) and writes `docs/sprints/###/backlog.md`. |
 | 2 | `jd-pair-tdd` | Pair programming: tests from the ACs first, then code, then refactor. Warns about architecture risks once, then follows the developer. |
-| 2 | `jd-static-analysis` | Linters, typecheck, coverage and SonarQube (MCP). Runs only when the developer asks. |
+| 2 | `jd-static-analysis` | Linters, typecheck, coverage and SonarQube (MCP, optional). Runs only when the developer asks. |
 | any | `jd-decision-log` | Records essential technical decisions and their reasons as ADRs in `docs/decisions/`. |
 | 2.5 | `jd-infra` | Suggests infrastructure from estimated users, budget and architecture. The developer corrects it. Result: Terraform in `infra/`. Never applies without approval. |
-| 3 | `jd-gitflow` | Git-flow: `feature/*` → `develop` → `release/*` → `main`, plus `hotfix/*`. Conventional Commits that reference US and AC ids. |
-| 3 | `jd-cicd` | GitHub Actions: CI on every branch, deploy of the release to the infrastructure on merge to `main`. Does not implement DORA metrics; keeps deploys visible to your existing DORA action. |
+| any | `jd-gitflow` | Git-flow for the whole project: decides when work needs a new `feature/*`, `release/*` or `hotfix/*` branch, Conventional Commits with US and AC ids, a PR for every merge. |
+| 3 | `jd-cicd` | GitHub Actions: CI on every git-flow branch, deploy of the release to the infrastructure on merge to `main`. Does not implement DORA metrics; keeps deploys visible to your DORA action, if you use one. |
 | 4 | `jd-observability` | Suggests observability tools, checks the app is observable by design, and connects it. |
 | loop | `jd-retro` | Analyzes production, DORA and quality data, suggests post-sprint fixes, and writes `retro.md` that the next sprint reads. |
 
@@ -53,9 +56,45 @@ docs/
 
 AC ids are global per project (`AC-1`, `AC-2`, ...), so test names like `test_ac3_rejects_duplicate_email` point to one criterion.
 
+## Git-flow
+
+Git-flow covers the whole project, not only merging. In any step, before changing files, the agent analyzes whether the work needs a new branch, fits the branch in progress, or needs none. It proposes with a reason; you decide.
+
+| Situation | Branch |
+|---|---|
+| New sprint: a group of stories big enough to be its own use case | new `feature/<feature>` from `develop` |
+| Small story or change that extends a feature in progress | that feature's branch |
+| Infra, CI/CD or observability work that deserves its own review | new `feature/<topic>` from `develop` |
+| Only patching a production bug | `hotfix/X.Y.Z` from `main` |
+| Features ready in `develop` and you ask for a release | `release/X.Y.Z` from `develop` |
+| Planning docs (committed docs modes) with no branch yet | the first feature branch they belong to |
+| Reading, analysis, more work on the current branch | no new branch |
+
+Every merge is a pull request: feature → `develop`, release and hotfix → `main`, then `main` → `develop`. Nothing is committed directly on `main` or `develop`. Commits use Conventional Commits with US and AC ids.
+
+## Optional tools
+
+SonarQube (MCP server), a DORA metrics GitHub Action, the `gh` CLI, Terraform, tflint and observability tools are optional. When a step needs one that is missing, it asks you to add it (and says what it gives) or to go without; both are valid. The answer goes to the `## Tools` section of `AGENTS.md`, so it is asked once, and the step adapts:
+
+| Tool | Without it |
+|---|---|
+| SonarQube + MCP server | `jd-static-analysis` uses local linters, typecheck and coverage; `jd-cicd` has no Sonar step; `jd-retro` uses local coverage. |
+| DORA metrics action | `jd-retro` skips DORA metrics. |
+| `gh` CLI | The agent writes the PR title and body; you open the PR on the web. Merges still go through PRs. |
+| Terraform, tflint | `jd-infra` writes the Terraform files but cannot validate or plan them. |
+| Observability MCPs/CLIs | `jd-retro` asks you for exports or screenshots. |
+
 ## Obsidian Vault
 
-The `jd-obsidian-sync` subagent runs in the background after any change in `docs/`. It copies the docs to:
+Optional. `install.py` asks for your vault:
+
+```
+Obsidian Vault path (empty for no Obsidian):
+```
+
+The path is saved in the jdharness config. `jdharness install` and `update` write it into the `jd-obsidian-sync` subagent (the repo file only has a `{{OBSIDIAN_VAULT}}` placeholder). With no vault, the subagent is not installed and only the `repo-only` and `none` docs modes are offered. To change the vault, run `install.py` again (or `install.py --vault <dir>` / `--no-vault`), then `jdharness update` in each project.
+
+In `mirror` and `vault-only` modes, the `jd-obsidian-sync` subagent runs in the background after any change in `docs/`. It copies the docs to:
 
 ```
 <vault>/Projects/<Project>/docs/
@@ -63,24 +102,20 @@ The `jd-obsidian-sync` subagent runs in the background after any change in `docs
 
 and adds wikilinks between them: backlog ↔ user stories ↔ ACs ↔ sprints ↔ ADRs ↔ retros. Links are added only in the vault copy; the project's `docs/` stays plain markdown.
 
-**Change the vault path before using it.** The subagent has a hardcoded path that only exists on the author's machine:
-
-```
-/home/juandevgo/Documents/Obsidian Vault
-```
-
-Open `agents/jd-obsidian-sync.md` and replace that path in the `## Paths` section with the absolute path of your own Obsidian Vault. Keep the path in the same line format; spaces are fine.
-
 `<Project>` comes from `Name` in the project's `AGENTS.md`, or the repo directory name. The folders are created if missing.
 
 ### Docs modes
 
-`jd-agents` asks for one of two modes:
+`jd-agents` asks for one of four modes:
 
-- `mirror`: `docs/` is committed to the repo and mirrored to the vault.
-- `vault-only`: `docs/` is a local working copy added to `.gitignore`; the vault is the source of truth.
+| Mode | `docs/` | Obsidian | Needs a vault |
+|---|---|---|---|
+| `mirror` | committed | copied and linked | yes |
+| `vault-only` | local working copy in `.gitignore` | source of truth | yes |
+| `repo-only` | committed | no | no |
+| `none` | not written | no | no |
 
-Every skill writes to `docs/` in both modes.
+In `none` mode, skills show the backlog, stories, sprint plan and retro in the chat, ADRs go in the commit body and PR description, and later steps work from the conversation, tests, commits and PRs, or ask you.
 
 ### Model
 
@@ -96,6 +131,7 @@ Needs Python 3.8+ (Linux, macOS or Windows) and git. No third-party packages.
 git clone <this-repo-url> juan-devops
 cd juan-devops
 python3 install.py        # Windows: py install.py
+                          # asks: "Obsidian Vault path (empty for no Obsidian):"
 ```
 
 | OS | Where it goes | PATH |
@@ -103,12 +139,14 @@ python3 install.py        # Windows: py install.py
 | Linux/macOS | `~/.local/bin/jdharness` (executable copy of `jdharness.py`) | Adds a marked block (`# >>> jdharness >>>`) to the profile of your `$SHELL`: `.zshrc`, `.bashrc` (`.bash_profile` on macOS), fish `conf.d/jdharness.fish`, or `.profile`. Skipped if the folder is already on `PATH`; never added twice. |
 | Windows | `%LOCALAPPDATA%\Programs\jdharness\` with `jdharness.py`, `jdharness.cmd` (cmd, PowerShell) and `jdharness` (Git Bash) | Appends the folder to the user `PATH` in the registry and notifies open programs. |
 
-It also saves the clone's location in `~/.config/jdharness/config.json` (`%APPDATA%\jdharness\config.json` on Windows). Open a new terminal afterwards, and keep the clone where it is: `jdharness` installs from it and `update` pulls it. If you move it, run `install.py` again.
+It also saves the clone's location and the vault in `~/.config/jdharness/config.json` (`%APPDATA%\jdharness\config.json` on Windows). Open a new terminal afterwards, and keep the clone where it is: `jdharness` installs from it and `update` pulls it. If you move it, run `install.py` again.
 
 | `install.py` option | Effect |
 |---|---|
 | `--bin-dir <dir>` | Install somewhere else. |
 | `--no-modify-path` | Do not touch `PATH` or shell profiles. |
+| `--vault <dir>` | Use this Obsidian Vault without asking. |
+| `--no-vault` | No Obsidian, without asking. Without a terminal and without these flags, the saved vault is kept (none on first install). |
 | `--uninstall` | Remove the command, its config and the `PATH` entry. Harnesses already installed in projects stay. |
 
 ### 2. Install the harness in a project
@@ -123,7 +161,7 @@ jdharness install              # asks: "Add a .claude directory for Claude Code?
 | `jdharness install [-p PATH] [--claude\|--no-claude] [-f]` | Copies every skill and agent into `PATH/.agents` (default: current directory). Asks about `.claude` unless you pass a flag; without a terminal the answer is yes. |
 | `jdharness update [-p PATH] [--no-pull] [--claude\|--no-claude] [-f]` | Runs `git pull --ff-only` in the clone, replaces the `jdharness` command if it changed and restarts it, then refreshes `.agents` and the `.claude` links. New skills are added, skills removed from the repo are removed. Keeps your `.claude` choice unless you pass a flag. |
 | `jdharness remove [-p PATH] [-y]` | Asks first (`-y` skips it) and removes only what it installed. Aliases: `delete`, `uninstall`. |
-| `jdharness status [-p PATH]` | Shows what is installed and the repo commit it came from. |
+| `jdharness status [-p PATH]` | Shows what is installed, the repo commit it came from and the vault. |
 | `--source <repo>` | On `install`/`update`: use another clone. Also `JDHARNESS_SOURCE=<repo>`. |
 
 ### How `.agents` and `.claude` work
@@ -135,7 +173,7 @@ jdharness install              # asks: "Add a .claude directory for Claude Code?
   .agents/
     .jdharness.json               what was installed, from which repo and commit
     skills/jd-*/SKILL.md
-    agents/jd-obsidian-sync.md
+    agents/jd-obsidian-sync.md    only with an Obsidian Vault
   .claude/                        only if you said yes
     skills/jd-*                -> ../../.agents/skills/jd-*
     agents/jd-obsidian-sync.md -> ../../.agents/agents/jd-obsidian-sync.md
@@ -145,7 +183,7 @@ jdharness install              # asks: "Add a .claude directory for Claude Code?
 - On Windows without symlink permission (no Developer Mode, not admin), folders get junctions and files get hard links; if those fail too, copies. `jdharness update` recreates them, so run it after editing `.agents` when `status` reports copies.
 - Existing paths with the same names that `jdharness` did not install stop `install` and `update` with a list of conflicts; `--force` replaces them.
 - `jdharness install -p ~` installs for all projects (`~/.agents` and `~/.claude`).
-- `update` overwrites `.agents/` with the repo's files. Make your changes (like the vault path) in the clone's `agents/jd-obsidian-sync.md`, not in `.agents/`. If upstream also changes that file, `git pull --ff-only` stops; commit or stash your change and merge it.
+- `update` overwrites `.agents/` with the repo's files. Make your changes in the clone, not in `.agents/`. If upstream also changes those files, `git pull --ff-only` stops; commit or stash your change and merge it. The vault path is not one of those changes: it comes from `install.py`.
 
 ## Tests
 
@@ -157,9 +195,9 @@ python3 -m unittest discover -s tests -v
 
 | File | Covers |
 |---|---|
-| `tests/test_jdharness.py` | `install`, `update`, `remove`, `status`: copies, relative links, the `.claude` prompt, conflicts and `--force`, unrelated files kept, skills added and dropped on update, Windows junction/hard link/copy fallbacks (simulated). |
-| `tests/test_install.py` | Launchers per OS, shell profile block per shell (added once, removed cleanly), Windows registry `PATH` (fake registry), install then uninstall. |
-| `tests/test_end_to_end.py` | Real subprocesses: clone a git remote, `install.py`, `jdharness install`, upstream commit, `jdharness update` (pull, self-update, restart), `remove`, `install.py --uninstall`. Also checks every skill has valid frontmatter and at most 80 lines. |
+| `tests/test_jdharness.py` | `install`, `update`, `remove`, `status`: copies, relative links, the `.claude` prompt, conflicts and `--force`, unrelated files kept, skills added and dropped on update, vault written into agents or agents skipped without a vault (and on update when it changes), Windows junction/hard link/copy fallbacks (simulated). |
+| `tests/test_install.py` | Launchers per OS, shell profile block per shell (added once, removed cleanly), Windows registry `PATH` (fake registry), install then uninstall, the vault prompt (quoted paths, missing dirs asked again, empty = no Obsidian), `--vault`/`--no-vault`, saved vault kept without a terminal. |
+| `tests/test_end_to_end.py` | Real subprocesses: clone a git remote, `install.py --vault`, `jdharness install` (vault in the subagent), upstream commit, `jdharness update` (pull, self-update, restart), `remove`, `install.py --uninstall`; no vault means no subagent. Also checks every skill has valid frontmatter and at most 80 lines, no machine paths in skills or agents, the four docs modes, syncing tied to the docs mode, every skill uses `jd-gitflow`, and merges go through PRs. |
 
 Every test runs in a temporary `HOME`; none touches your profile, config, registry or projects. On Windows, tests that would edit the real user `PATH` are skipped.
 
@@ -170,8 +208,12 @@ In a new project, ask Claude to run `jd-agents`, then give it the spec for `jd-b
 ## Requirements
 
 - Claude Code
-- Python 3.8+ and git (for `install.py` and `jdharness`)
-- SonarQube MCP server (for `jd-static-analysis`)
+- Python 3.8+ and git (for `install.py`, `jdharness` and git-flow)
+
+Optional (see [Optional tools](#optional-tools); the skills ask when one is missing):
+
+- Obsidian Vault (for `mirror` and `vault-only` docs modes)
+- SonarQube and its MCP server (for `jd-static-analysis`, `jd-cicd`, `jd-retro`)
 - Terraform, tflint (for `jd-infra`)
-- `gh` CLI (for `jd-gitflow` PRs)
-- A DORA metrics GitHub Action of your own (`jd-cicd` does not create one)
+- `gh` CLI (for PRs in `jd-gitflow`)
+- A DORA metrics GitHub Action of your own (`jd-cicd` does not create one; `jd-retro` reads it)
