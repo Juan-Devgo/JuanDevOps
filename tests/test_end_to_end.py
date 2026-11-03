@@ -34,6 +34,8 @@ class EndToEndTest(unittest.TestCase):
         self.bin_dir = self.tmp / "bin"
         self.project = self.tmp / "project"
         self.project.mkdir()
+        self.vault = self.tmp / "Obsidian Vault"
+        self.vault.mkdir()
 
         # upstream repo with this repo's files, and the user's clone of it
         self.upstream = self.tmp / "upstream"
@@ -48,7 +50,8 @@ class EndToEndTest(unittest.TestCase):
         self.run_ok([*GIT, "clone", "-q", str(self.upstream), str(self.clone)])
 
     def run_ok(self, argv, cwd=None):
-        result = subprocess.run(argv, cwd=cwd, env=self.env, capture_output=True, text=True)
+        result = subprocess.run(argv, cwd=cwd, env=self.env, capture_output=True, text=True,
+                                stdin=subprocess.DEVNULL)  # never wait on a prompt
         self.assertEqual(result.returncode, 0, f"{argv}\n{result.stdout}\n{result.stderr}")
         return result.stdout
 
@@ -71,9 +74,10 @@ class EndToEndTest(unittest.TestCase):
         skills = sorted(p.parent.name for p in (REPO / "skills").glob("*/SKILL.md"))
         agents = sorted(p.name for p in (REPO / "agents").glob("*.md"))
 
-        # 1. install.py installs the command and points it at the clone
-        out = self.install_py()
+        # 1. install.py installs the command, points it at the clone and saves the vault
+        out = self.install_py("--vault", str(self.vault))
         self.assertIn("Installed jdharness", out)
+        self.assertIn(f"Obsidian Vault: {self.vault}", out)
         if not WINDOWS:
             self.assertIn(str(self.bin_dir), (self.home / ".bashrc").read_text())
 
@@ -85,6 +89,9 @@ class EndToEndTest(unittest.TestCase):
             self.assertEqual(installed.read_bytes(), (REPO / "skills" / skill / "SKILL.md").read_bytes())
         for agent in agents:
             self.assertTrue((self.project / ".claude/agents" / agent).is_file())
+        sync = (self.project / ".claude/agents/jd-obsidian-sync.md").read_text(encoding="utf-8")
+        self.assertIn(f"Vault: `{self.vault}`", sync)
+        self.assertNotIn("{{OBSIDIAN_VAULT}}", sync)
         manifest = json.loads((self.project / ".agents/.jdharness.json").read_text())
         self.assertEqual(manifest["source"], str(self.clone))
         self.assertEqual(manifest["commit"], self.git(self.clone, "rev-parse", "--short", "HEAD"))
@@ -127,6 +134,8 @@ class EndToEndTest(unittest.TestCase):
                        else [str(self.bin_dir / "jdharness")]), "install", "--no-claude"], cwd=self.project)
         self.assertTrue((self.project / ".agents/skills").is_dir())
         self.assertFalse((self.project / ".claude").exists())
+        # no vault given and no terminal: no Obsidian, so no sync agent
+        self.assertFalse((self.project / ".agents/agents/jd-obsidian-sync.md").exists())
         self.jd("install", "-p", str(self.home), "--claude")  # -p ~ : all projects
         self.assertTrue((self.home / ".claude/skills/jd-agents/SKILL.md").is_file())
 
@@ -158,6 +167,38 @@ class RepoContentTest(unittest.TestCase):
                 self.assertEqual(meta.get("name"), path.stem)
                 for key in ("description", "tools", "model"):
                     self.assertTrue(meta.get(key), f"{path.name} has no {key}")
+
+    def test_no_hardcoded_vault_path(self):
+        sync = (REPO / "agents/jd-obsidian-sync.md").read_text(encoding="utf-8")
+        self.assertIn("{{OBSIDIAN_VAULT}}", sync)
+        for path in [*(REPO / "agents").glob("*.md"), *(REPO / "skills").glob("*/SKILL.md")]:
+            with self.subTest(file=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertNotRegex(text, r"/home/|/Users/|[A-Z]:\\Users", f"{path} has a machine path")
+
+    def test_docs_modes(self):
+        agents_skill = (REPO / "skills/jd-agents/SKILL.md").read_text(encoding="utf-8")
+        for mode in ("mirror", "vault-only", "repo-only", "none"):
+            self.assertIn(f"`{mode}`", agents_skill)
+        for path in (REPO / "skills").glob("*/SKILL.md"):
+            text = path.read_text(encoding="utf-8")
+            if "`jd-obsidian-sync`" in text and path.parent.name != "jd-agents":
+                with self.subTest(skill=path.parent.name):
+                    self.assertIn("docs mode", text, "syncing must depend on the docs mode")
+
+    def test_every_step_uses_gitflow(self):
+        for path in (REPO / "skills").glob("*/SKILL.md"):
+            if path.parent.name != "jd-gitflow":
+                with self.subTest(skill=path.parent.name):
+                    self.assertIn("jd-gitflow", path.read_text(encoding="utf-8"))
+
+    def test_gitflow_merges_through_prs(self):
+        gitflow = (REPO / "skills/jd-gitflow/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Every merge goes through a PR", gitflow)
+        self.assertIn("## Decide the branch", gitflow)
+        for path in (REPO / "skills").glob("*/SKILL.md"):
+            with self.subTest(skill=path.parent.name):
+                self.assertNotIn("git merge --no-ff", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

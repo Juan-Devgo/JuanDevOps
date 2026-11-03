@@ -17,6 +17,7 @@ VERSION = "1.0.0"
 MANIFEST = ".jdharness.json"
 WINDOWS = os.name == "nt"
 PRUNE = (".agents/skills", ".agents/agents", ".agents", ".claude/skills", ".claude/agents", ".claude")
+VAULT_TOKEN = b"{{OBSIDIAN_VAULT}}"  # replaced with the vault path; files with it need a vault
 
 
 def die(message):
@@ -61,6 +62,11 @@ def write_config(data):
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def read_vault():
+    """Obsidian Vault path chosen in install.py, or None for no Obsidian."""
+    return read_config().get("vault") or None
+
+
 # --- source repo ------------------------------------------------------------
 
 def is_source(path):
@@ -87,9 +93,13 @@ def find_source(explicit, manifest=None):
     die("JuanDevops repo not found. Run install.py from the cloned repo or pass --source.")
 
 
-def source_items(src):
+def needs_vault(path):
+    return path.is_file() and VAULT_TOKEN in path.read_bytes()
+
+
+def source_items(src, vault):
     items = ["skills/" + d.name for d in sorted((src / "skills").iterdir()) if (d / "SKILL.md").is_file()]
-    items += ["agents/" + f.name for f in sorted((src / "agents").glob("*.md"))]
+    items += ["agents/" + f.name for f in sorted((src / "agents").glob("*.md")) if vault or not needs_vault(f)]
     if not items:
         die(f"no skills or agents found in {src}")
     return items
@@ -148,6 +158,13 @@ def copy(src, dst):
         shutil.copy2(src, dst)
 
 
+def copy_item(src, dst, vault):
+    if vault and needs_vault(src):
+        dst.write_bytes(src.read_bytes().replace(VAULT_TOKEN, vault.encode("utf-8")))
+    else:
+        copy(src, dst)
+
+
 def make_link(target, link):
     """Create link -> target and return the kind used."""
     is_dir = target.is_dir()
@@ -198,7 +215,8 @@ def sync(project, src, claude, force):
     agents, claude_dir = project / ".agents", project / ".claude"
     old = read_manifest(project) or {}
     owned, old_links = set(old.get("items", [])), old.get("links", {})
-    items = source_items(src)
+    vault = read_vault()
+    items = source_items(src, vault)
 
     if not force:
         conflicts = [agents / i for i in items if i not in owned and lexists(agents / i)]
@@ -218,7 +236,7 @@ def sync(project, src, claude, force):
         dst = agents / rel
         remove(dst)
         dst.parent.mkdir(parents=True, exist_ok=True)
-        copy(src / rel, dst)
+        copy_item(src / rel, dst, vault)
 
     links = {}
     if claude:
@@ -229,7 +247,7 @@ def sync(project, src, claude, force):
             links[rel] = make_link(agents / rel, link)
 
     manifest = {"version": VERSION, "source": str(src), "commit": git(src, "rev-parse", "--short", "HEAD"),
-                "claude": claude, "items": items, "links": links}
+                "claude": claude, "vault": vault, "items": items, "links": links}
     (agents / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     prune(project)
     return manifest
@@ -246,6 +264,10 @@ def report(project, manifest):
             print("  Links were not possible, so .claude has copies: run 'jdharness update' after editing .agents.")
     else:
         print("Claude Code: not linked (run with --claude to add .claude)")
+    if manifest.get("vault"):
+        print(f"Obsidian Vault: {manifest['vault']}")
+    else:
+        print("Obsidian Vault: none, so jd-obsidian-sync is not installed (run install.py to add a vault)")
     source = manifest["source"] + (f" @ {manifest['commit']}" if manifest.get("commit") else "")
     print(f"Source: {source}")
 

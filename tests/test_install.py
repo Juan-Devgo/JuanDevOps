@@ -6,7 +6,7 @@ import types
 import unittest
 from unittest import mock
 
-from _support import REPO, Sandbox, jdharness
+from _support import REPO, FakeStdin, Sandbox, jdharness
 
 import install  # noqa: E402  (_support puts the repo on sys.path)
 
@@ -142,13 +142,22 @@ class WindowsPathTest(Sandbox):
         self.assertEqual(self.store["Path"], (str(self.bin_dir), 2))
 
 
-class MainTest(Sandbox):
-    def main(self, *args):
+class MainCase(Sandbox):
+    """Runs install.main() in-process with a fake terminal."""
+
+    def main(self, *args, tty=False, answers=()):
+        replies = iter(answers)
         with mock.patch.object(sys, "argv", ["install.py", *args]), \
                 mock.patch.dict(os.environ, {"PATH": "/usr/bin"}), \
-                mock.patch("sys.stdout"):
+                mock.patch("sys.stdout"), mock.patch("sys.stdin", FakeStdin(tty)), \
+                mock.patch("builtins.input", lambda prompt="": next(replies)):
             install.main()
 
+    def vault(self):
+        return jdharness.read_config().get("vault")
+
+
+class MainTest(MainCase):
     def test_default_bin_dir(self):
         expected = (self.home / "AppData/Local/Programs/jdharness" if os.name == "nt"
                     else self.home / ".local/bin")
@@ -159,7 +168,7 @@ class MainTest(Sandbox):
         self.main()
         bin_dir = self.home / ".local/bin"
         self.assertTrue((bin_dir / "jdharness").is_file())
-        self.assertEqual(jdharness.read_config(), {"source": str(REPO), "bin_dir": str(bin_dir)})
+        self.assertEqual(jdharness.read_config(), {"source": str(REPO), "bin_dir": str(bin_dir), "vault": None})
         self.assertIn(install.MARK_START, (self.home / ".bashrc").read_text())
         self.main("--uninstall")
         self.assertFalse((bin_dir / "jdharness").exists())
@@ -173,6 +182,45 @@ class MainTest(Sandbox):
         self.assertFalse((self.home / ".bashrc").exists())
         self.main("--uninstall", "--no-modify-path")  # finds the custom dir in the config
         self.assertFalse(install.launchers(bin_dir)[0].exists())
+
+
+class VaultTest(MainCase):
+    def setUp(self):
+        super().setUp()
+        self.vault_dir = self.tmp / "Obsidian Vault"
+        self.vault_dir.mkdir()
+        self.flags = ("--bin-dir", str(self.tmp / "bin"), "--no-modify-path")
+
+    def test_prompt_reads_the_vault_path(self):
+        self.main(*self.flags, tty=True, answers=[f'"{self.vault_dir}"'])  # quotes from drag and drop
+        self.assertEqual(self.vault(), str(self.vault_dir))
+
+    def test_prompt_asks_again_for_a_missing_dir(self):
+        self.main(*self.flags, tty=True, answers=[str(self.tmp / "nope"), str(self.vault_dir)])
+        self.assertEqual(self.vault(), str(self.vault_dir))
+
+    def test_prompt_empty_means_no_obsidian(self):
+        self.main(*self.flags, "--vault", str(self.vault_dir))
+        self.main(*self.flags, tty=True, answers=[""])
+        self.assertIsNone(self.vault())
+
+    def test_without_terminal_keeps_the_saved_vault(self):
+        self.main(*self.flags)
+        self.assertIsNone(self.vault())
+        self.main(*self.flags, "--vault", str(self.vault_dir))
+        self.main(*self.flags)
+        self.assertEqual(self.vault(), str(self.vault_dir))
+
+    def test_no_vault_flag(self):
+        self.main(*self.flags, "--vault", str(self.vault_dir))
+        self.main(*self.flags, "--no-vault", tty=True)  # does not ask
+        self.assertIsNone(self.vault())
+
+    def test_vault_flag_must_be_a_directory(self):
+        with self.assertRaises(SystemExit) as exit_:
+            self.main(*self.flags, "--vault", str(self.tmp / "nope"))
+        self.assertIn("not a directory", str(exit_.exception.code))
+        self.assertFalse(jdharness.config_file().exists())
 
 
 if __name__ == "__main__":

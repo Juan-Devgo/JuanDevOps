@@ -21,6 +21,13 @@ import jdharness  # noqa: E402
 
 SKILLS = ("jd-alpha", "jd-beta")
 AGENT = "jd-helper.md"
+VAULT_AGENT = "jd-sync.md"
+VAULT_TEXT = "Vault: `{{OBSIDIAN_VAULT}}`\n"
+
+
+def add_vault_agent(root):
+    """Add an agent that needs the Obsidian Vault, like jd-obsidian-sync."""
+    (root / "agents" / VAULT_AGENT).write_text(VAULT_TEXT, encoding="utf-8")
 
 
 def make_source(root, skills=SKILLS, agents=(AGENT,)):

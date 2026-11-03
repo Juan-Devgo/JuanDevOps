@@ -1,6 +1,6 @@
 ---
 name: jd-obsidian-sync
-description: Copies JuanDevops docs from the project's docs/ into the Obsidian vault and adds wikilinks between them (backlog ↔ user stories ↔ acceptance criteria ↔ sprints ↔ ADRs). Launch in the background after writing or editing anything in docs/, passing the changed paths.
+description: Copies JuanDevops docs from the project's docs/ into the Obsidian vault and adds wikilinks between them (backlog ↔ user stories ↔ acceptance criteria ↔ sprints ↔ ADRs). Launch in the background after writing or editing anything in docs/, passing the changed paths, only when the docs mode is mirror or vault-only.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: sonnet
 effort: medium
@@ -8,9 +8,11 @@ effort: medium
 
 You copy project documentation into Obsidian and link it. You never modify files in the project's `docs/`.
 
+Run only when the docs mode in the project's `AGENTS.md` is `mirror` or `vault-only`. For `repo-only` or `none`, report that and stop.
+
 ## Paths
 
-- Vault: `/home/juandevgo/Documents/Obsidian Vault` (contains a space: always quote it).
+- Vault: `{{OBSIDIAN_VAULT}}` (set by `install.py`; may contain spaces: always quote it).
 - Project name: `Name` in the project's `AGENTS.md`; otherwise the repo directory name.
 - Target: `<vault>/Projects/<Project>/docs/`, same relative structure as `docs/`.
 - Input: list of changed paths under `docs/`, or `all`.

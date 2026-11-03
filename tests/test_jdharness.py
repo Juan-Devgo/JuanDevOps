@@ -5,7 +5,7 @@ import shutil
 import unittest
 from unittest import mock
 
-from _support import AGENT, SKILLS, Sandbox, jdharness, make_source
+from _support import AGENT, SKILLS, VAULT_AGENT, VAULT_TEXT, Sandbox, add_vault_agent, jdharness, make_source
 
 ITEMS = [f"skills/{s}" for s in SKILLS] + [f"agents/{AGENT}"]
 
@@ -304,6 +304,51 @@ class WindowsFallbackTest(Sandbox):
             (self.src / "skills/jd-alpha/SKILL.md").write_text("v2\n")
             self.assertEqual(self.cli("update", "-p", str(self.project), "--no-pull")[0], 0)
         self.assertEqual((self.project / ".claude/skills/jd-alpha/SKILL.md").read_text(), "v2\n")
+
+
+class VaultTest(Sandbox):
+    """Agents with {{OBSIDIAN_VAULT}} get the vault from install.py, or are skipped without one."""
+
+    def setUp(self):
+        super().setUp()
+        add_vault_agent(self.src)
+        self.vault = self.tmp / "My Vault"
+        self.vault.mkdir()
+
+    def set_vault(self, vault):
+        jdharness.write_config({"source": str(self.src), "vault": vault and str(vault)})
+
+    def test_without_vault_skips_agents_that_need_it(self):
+        out = self.install("--claude")
+        self.assertNotIn(f"agents/{VAULT_AGENT}", self.manifest()["items"])
+        self.assertFalse((self.project / ".agents/agents" / VAULT_AGENT).exists())
+        self.assertFalse(os.path.lexists(self.project / ".claude/agents" / VAULT_AGENT))
+        self.assertTrue((self.project / ".agents/agents" / AGENT).is_file())
+        self.assertIsNone(self.manifest()["vault"])
+        self.assertIn("Obsidian Vault: none", out)
+
+    def test_vault_path_is_written_into_the_agent(self):
+        self.set_vault(self.vault)
+        out = self.install("--claude")
+        installed = self.project / ".claude/agents" / VAULT_AGENT
+        self.assertEqual(installed.read_text(), f"Vault: `{self.vault}`\n")
+        self.assertEqual(self.manifest()["vault"], str(self.vault))
+        self.assertIn(f"Obsidian Vault: {self.vault}", out)
+        self.assertEqual((self.src / "agents" / VAULT_AGENT).read_text(), VAULT_TEXT, "source must keep the token")
+
+    def test_update_follows_vault_changes(self):
+        self.set_vault(self.vault)
+        self.install("--claude")
+        other = self.tmp / "other"
+        other.mkdir()
+        self.set_vault(other)
+        self.assertEqual(self.cli("update", "-p", str(self.project), "--no-pull")[0], 0)
+        self.assertIn(str(other), (self.project / ".agents/agents" / VAULT_AGENT).read_text())
+        self.set_vault(None)
+        self.assertEqual(self.cli("update", "-p", str(self.project), "--no-pull")[0], 0)
+        self.assertFalse((self.project / ".agents/agents" / VAULT_AGENT).exists())
+        self.assertFalse(os.path.lexists(self.project / ".claude/agents" / VAULT_AGENT))
+        self.assertIsNone(self.manifest()["vault"])
 
 
 class ConfigTest(Sandbox):

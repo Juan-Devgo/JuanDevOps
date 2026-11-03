@@ -6,6 +6,8 @@ in your shell profile.
 Windows: copies it to %LOCALAPPDATA%\\Programs\\jdharness with jdharness.cmd
 (cmd/PowerShell) and jdharness (Git Bash) launchers, and adds that directory to
 the user PATH.
+Both: asks for your Obsidian Vault (empty for no Obsidian), used by the
+jd-obsidian-sync subagent.
 """
 import argparse
 import os
@@ -149,16 +151,46 @@ def windows_path(bin_dir, add):
     return True
 
 
+# --- Obsidian Vault ---------------------------------------------------------
+
+def vault_dir(raw):
+    """Absolute vault path, or None if raw is empty. Raises ValueError if it is not a directory."""
+    raw = raw.strip().strip("'\"")
+    if not raw:
+        return None
+    path = Path(raw).expanduser().resolve()
+    if not path.is_dir():
+        raise ValueError(f"{path} is not a directory")
+    return str(path)
+
+
+def ask_vault(saved):
+    """Read the vault path from the terminal. Without a terminal, keep the saved one."""
+    if not sys.stdin.isatty():
+        return saved
+    if saved:
+        print(f"Current Obsidian Vault: {saved}")
+    while True:
+        try:
+            return vault_dir(input("Obsidian Vault path (empty for no Obsidian): "))
+        except ValueError as error:
+            print(error)
+
+
 # --- commands ---------------------------------------------------------------
 
-def install(bin_dir, modify_path):
+def install(bin_dir, modify_path, vault):
     missing = [n for n in ("skills", "agents", "jdharness.py") if not (REPO / n).exists()]
     if missing:
         sys.exit(f"install.py must run from the cloned JuanDevops repo (missing: {', '.join(missing)})")
     install_files(bin_dir)
-    jdharness.write_config({"source": str(REPO), "bin_dir": str(bin_dir)})
+    jdharness.write_config({"source": str(REPO), "bin_dir": str(bin_dir), "vault": vault})
     print(f"Installed jdharness in {bin_dir}")
     print(f"Source repo: {REPO} (keep it here; 'jdharness update' pulls it)")
+    if vault:
+        print(f"Obsidian Vault: {vault}")
+    else:
+        print("Obsidian Vault: none (docs modes repo-only or none; jd-obsidian-sync is not installed)")
 
     if not modify_path:
         if not on_path(bin_dir):
@@ -171,6 +203,7 @@ def install(bin_dir, modify_path):
         if profile:
             print(f"Added {bin_dir} to PATH in {profile}. Open a new terminal or run: source \"{profile}\"")
     print("Next: cd into a project and run 'jdharness install' (or 'jdharness --help').")
+    print("Projects installed before keep their old vault until you run 'jdharness update' in them.")
 
 
 def uninstall(bin_dir, modify_path):
@@ -202,12 +235,32 @@ def main():
                         help="do not touch PATH or shell profiles")
     parser.add_argument("--uninstall", action="store_true",
                         help="remove the jdharness command, its config and its PATH entry")
+    vault = parser.add_mutually_exclusive_group()
+    vault.add_argument("--vault", metavar="DIR",
+                       help="Obsidian Vault for jd-obsidian-sync, without asking")
+    vault.add_argument("--no-vault", action="store_true",
+                       help="no Obsidian: do not ask and do not install jd-obsidian-sync")
     args = parser.parse_args()
-    saved = jdharness.read_config().get("bin_dir")
+    config = jdharness.read_config()
+    saved = config.get("bin_dir")
     bin_dir = (args.bin_dir or (Path(saved) if args.uninstall and saved else default_bin_dir()))
     bin_dir = bin_dir.expanduser().resolve()
     try:
-        (uninstall if args.uninstall else install)(bin_dir, not args.no_modify_path)
+        if args.uninstall:
+            uninstall(bin_dir, not args.no_modify_path)
+            return
+        if args.no_vault:
+            vault = None
+        elif args.vault is not None:
+            vault = vault_dir(args.vault)
+        else:
+            vault = ask_vault(config.get("vault"))
+        install(bin_dir, not args.no_modify_path, vault)
+    except ValueError as error:
+        sys.exit(f"install.py: error: --vault: {error}")
+    except (KeyboardInterrupt, EOFError):
+        print()
+        sys.exit(130)
     except OSError as error:
         sys.exit(f"install.py: error: {error}")
 
